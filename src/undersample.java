@@ -75,10 +75,19 @@ public class undersample {
 		//Calculating and printing the result
 		BufferedReader fp1 = new BufferedReader(new FileReader("test.txt"));
 		BufferedReader fp2 = new BufferedReader(new FileReader("output.txt"));
-		int[][] prediction = new int[classcount][classcount];
-		for (int i=0;i<classcount;i++)
+		int[][] confusionmatrix = new int[classcount][classcount];
+		double[] TP = new double[classcount];
+		double[] TN = new double[classcount];
+		double[] FP = new double[classcount];
+		double[] FN = new double[classcount];
+		for (int i=0;i<classcount;i++){
 			for (int j=0;j<classcount;j++)
-				prediction[i][j]=0;
+				confusionmatrix[i][j]=0;
+			TP[i] = 0;
+			TN[i] = 0;
+			FP[i] = 0;
+			FN[i] = 0;
+		}
 		while (true) {
 			String line1 = fp1.readLine();
 			String line2 = fp2.readLine();
@@ -86,18 +95,38 @@ public class undersample {
 				break;
 			StringTokenizer st1 = new StringTokenizer(line1," \t\n\r\f:");
 			StringTokenizer st2 = new StringTokenizer(line2," \t\n\r\f:");
-			prediction[atoi(st1.nextToken())-1][(int)atof(st2.nextToken())-1]++;
+			int realclass = atoi(st1.nextToken())-1;
+			int predictclass = (int)atof(st2.nextToken())-1;
+			confusionmatrix[realclass][predictclass]++;
+			for (int i=0;i<classcount;i++)
+				if (realclass == i && predictclass == i)
+					TP[i]++;
+				else if (realclass == i && predictclass != i)
+					FN[i]++;
+				else if (realclass != i && predictclass == i)
+					FP[i]++;
+				else
+					TN[i]++;
 		}
 		fp1.close();
 		fp2.close();
-		System.out.println("Class Numbers : " + classcount);
+		double[] specificity = new double[classcount];
+		double[] recall = new double[classcount];
+		double[] f2 = new double[classcount];
+		for (int i=0;i<classcount;i++) {
+			specificity[i] = TN[i]/(TN[i]+FN[i]);
+			recall[i] = TP[i]/(TP[i]+FN[i]);
+			f2[i] = (1+2*2)*specificity[i]*recall[i]/(2*2*specificity[i]+recall[i]);
+		}
+		System.out.println("\nClass Numbers : " + classcount);
 		System.out.println("SVM Classification is done! The prediction result is:");
 		for (int i=0;i<classcount;i++) {
 			for (int j=0;j<classcount;j++)
-				System.out.format("%8d",prediction[i][j]);
+				System.out.format("%8d",confusionmatrix[i][j]);
+			System.out.format("       F2-measure : %f", f2[i]);
 			System.out.print("\n");
 		}
-		System.out.println("The accuracy is " + accuracy);
+		System.out.println("The average accuracy is " + accuracy);
 	}
 	
 	private static int atoi(String s)

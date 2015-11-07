@@ -34,47 +34,87 @@ public class undersample {
 		fp.close();
 		
 		//Undersampling to get the training set and testing set
-		for (int i=0;i<classcount;i++)
-			System.out.println("Class" + (i+1) + " : " + count[i]);
-		int mincount = count[0];
-		for (int i=1;i<classcount;i++)
-			if (count[i]<mincount)
-				mincount=count[i];
-		double[] samplerate = new double[classcount];
-		double basicrate = 0.7; //The sample rate of the training set for the minority class
-		for (int i=0;i<classcount;i++)
-				samplerate[i]=basicrate*mincount/count[i];
-		PrintWriter fp_train = new PrintWriter("train.txt", "UTF-8");
+		int modelnum = 1; //Number of classifier models or bagged numbers
+		double basicrate = 0.7; //The sample rate of the initial training set
+		PrintWriter[] fp_train = new PrintWriter[modelnum+1];
+		fp_train[0] = new PrintWriter("train.txt", "UTF-8");
 		PrintWriter fp_test = new PrintWriter("test.txt", "UTF-8");
 		fp = new BufferedReader(new FileReader("../Formatted_data_sets/car/car.data_formatted.txt"));		
 		while (true) {
 			String line = fp.readLine();
 			if(line == null)
 				break;
-			StringTokenizer st = new StringTokenizer(line," \t\n\r\f:");
 			double random = Math.random();
-			if (random<samplerate[atoi(st.nextToken())-1])
-				fp_train.println(line);
+			if (random<basicrate)
+				fp_train[0].println(line);
 			else
 				fp_test.println(line);
 		}
 		fp.close();
-		fp_train.close();
+		fp_train[0].close();
 		fp_test.close();
+		double mincount = count[0];
+		for (int i=1;i<classcount;i++)
+			if (count[i]<mincount)
+				mincount=count[i];
+		double[] samplerate = new double[classcount];
+		for (int i=0;i<classcount;i++)
+			samplerate[i]=mincount/count[i];
+		for (int i=0;i<modelnum;i++) {
+			StringBuilder str = new StringBuilder();
+			str.append("train");
+			str.append(i+1);
+			str.append(".txt");
+			String trainfile = str.toString();
+			fp_train[i+1] = new PrintWriter(trainfile, "UTF-8");
+			fp = new BufferedReader(new FileReader("train.txt"));		
+			while (true) {
+				String line = fp.readLine();
+				if(line == null)
+					break;
+				StringTokenizer st = new StringTokenizer(line," \t\n\r\f:");
+				double random = Math.random();
+				if (random<samplerate[atoi(st.nextToken())-1])
+					fp_train[i+1].println(line);
+			}
+			fp.close();
+			fp_train[i+1].close();
+		}
+		
 		
 		//Training and predicting
-		//String[] scaleArgTrain = {"-l", "0", "-s", "scale.txt", "train.txt"};
-		//String[] scaleArgTest = {"-r", "scale.txt", "test.txt"};
-		//svm_scale.main(scaleArgTrain);
-		//svm_scale.main(scaleArgTest);
-        String[] trainArgs = {"train.txt"};
-		String modelFile = svm_train.main(trainArgs);    
-		String[] testArgs = {"test.txt", modelFile, "output.txt"};
-		Double accuracy = svm_predict.main(testArgs);
+		for (int i=0;i<modelnum;i++) {
+			StringBuilder str1 = new StringBuilder();
+			str1.append("train");
+			str1.append(i+1);
+			str1.append(".txt");
+			String trainfile = str1.toString();
+			StringBuilder str2 = new StringBuilder();
+			str2.append("output");
+			str2.append(i+1);
+			str2.append(".txt");
+			String outputfile = str2.toString();
+			//String[] scaleArgTrain = {"-l", "0", "-s", "scale.txt", trainfile};
+			//String[] scaleArgTest = {"-r", "scale.txt", "test.txt"};
+			//svm_scale.main(scaleArgTrain);
+			//svm_scale.main(scaleArgTest);
+			String[] trainArgs = {trainfile};
+			String modelFile = svm_train.main(trainArgs);    
+			String[] testArgs = {"test.txt", modelFile, outputfile};
+			svm_predict.main(testArgs);
+		}
 		
 		//Calculating and printing the result
 		BufferedReader fp1 = new BufferedReader(new FileReader("test.txt"));
-		BufferedReader fp2 = new BufferedReader(new FileReader("output.txt"));
+		BufferedReader[] fp2 = new BufferedReader[modelnum];
+		for (int i=0;i<modelnum;i++) {
+			StringBuilder str = new StringBuilder();
+			str.append("output");
+			str.append(i+1);
+			str.append(".txt");
+			String outputfile = str.toString();
+			fp2[i] = new BufferedReader(new FileReader(outputfile));
+		}
 		int[][] confusionmatrix = new int[classcount][classcount];
 		double[] TP = new double[classcount];
 		double[] TN = new double[classcount];
@@ -90,13 +130,25 @@ public class undersample {
 		}
 		while (true) {
 			String line1 = fp1.readLine();
-			String line2 = fp2.readLine();
+			String[] line2 = new String[modelnum];
+			for (int i=0;i<modelnum;i++)
+				line2[i] = fp2[i].readLine();
 			if(line1 == null)
 				break;
 			StringTokenizer st1 = new StringTokenizer(line1," \t\n\r\f:");
-			StringTokenizer st2 = new StringTokenizer(line2," \t\n\r\f:");
+			StringTokenizer[] st2 = new StringTokenizer[modelnum];
+			for (int i=0;i<modelnum;i++)
+				st2[i] = new StringTokenizer(line2[i]," \t\n\r\f:");
 			int realclass = atoi(st1.nextToken())-1;
-			int predictclass = (int)atof(st2.nextToken())-1;
+			int[] predictcount = new int[classcount];
+			for (int i=0;i<classcount;i++)
+				predictcount[i] = 0;
+			for (int i=0;i<modelnum;i++)
+				predictcount[(int)atof(st2[i].nextToken())-1]++;
+			int predictclass = 0;
+			for (int i=1;i<classcount;i++)
+				if (predictcount[i]>predictcount[predictclass])
+					predictclass = i;
 			confusionmatrix[realclass][predictclass]++;
 			for (int i=0;i<classcount;i++)
 				if (realclass == i && predictclass == i)
@@ -109,7 +161,8 @@ public class undersample {
 					TN[i]++;
 		}
 		fp1.close();
-		fp2.close();
+		for (int i=0;i<modelnum;i++)
+			fp2[i].close();
 		double[] specificity = new double[classcount];
 		double[] recall = new double[classcount];
 		double[] f2 = new double[classcount];
@@ -119,6 +172,8 @@ public class undersample {
 			f2[i] = (1+2*2)*specificity[i]*recall[i]/(2*2*specificity[i]+recall[i]);
 		}
 		System.out.println("\nClass Numbers : " + classcount);
+		for (int i=0;i<classcount;i++)
+			System.out.println("Class" + (i+1) + " : " + count[i]);
 		System.out.println("SVM Classification is done! The prediction result is:");
 		for (int i=0;i<classcount;i++) {
 			for (int j=0;j<classcount;j++)
@@ -126,7 +181,6 @@ public class undersample {
 			System.out.format("       F2-measure : %f", f2[i]);
 			System.out.print("\n");
 		}
-		System.out.println("The average accuracy is " + accuracy);
 	}
 	
 	private static int atoi(String s)

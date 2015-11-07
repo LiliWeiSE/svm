@@ -163,24 +163,27 @@ public class undersample {
 		fp1.close();
 		for (int i=0;i<modelnum;i++)
 			fp2[i].close();
-		double[] specificity = new double[classcount];
-		double[] recall = new double[classcount];
-		double[] f2 = new double[classcount];
+		//Calculating micro-averaged F-measure: 
+		//Page6 of http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.104.8244&rep=rep1&type=pdf
+		double specificity, recall, f2, TNsum=0, TNFN=0, TPsum=0, TPFN=0;
 		for (int i=0;i<classcount;i++) {
-			specificity[i] = TN[i]/(TN[i]+FN[i]);
-			recall[i] = TP[i]/(TP[i]+FN[i]);
-			f2[i] = (1+2*2)*specificity[i]*recall[i]/(2*2*specificity[i]+recall[i]);
+			TNsum += TN[i];
+			TNFN += (TN[i]+FN[i]);
+			TPsum += TP[i];
+			TPFN += (TP[i]+FN[i]);
 		}
-		System.out.println("\nClass Numbers : " + classcount);
-		for (int i=0;i<classcount;i++)
-			System.out.println("Class" + (i+1) + " : " + count[i]);
-		System.out.println("SVM Classification is done! The prediction result is:");
+		specificity = TNsum/TNFN;
+		recall = TPsum/TPFN;
+		f2 = (1+2*2)*specificity*recall/(2*2*specificity+recall);
+		System.out.println("\nClass Number : " + classcount);
+		System.out.println("Classifier Number : " + modelnum);
+		System.out.println("Confusion Matrix :");
 		for (int i=0;i<classcount;i++) {
 			for (int j=0;j<classcount;j++)
 				System.out.format("%8d",confusionmatrix[i][j]);
-			System.out.format("       F2-measure : %f", f2[i]);
 			System.out.print("\n");
 		}
+		System.out.format("The micro-averaged F2-measure : %f", f2);
 	}
 	
 	private static int atoi(String s)

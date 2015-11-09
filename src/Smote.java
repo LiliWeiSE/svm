@@ -1,6 +1,9 @@
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileReader;
+import java.io.FileWriter;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -47,13 +50,22 @@ class IdxAndDst implements Comparable {
 public class Smote {
 	private static double minProportion = 0.1;
 	private static List<Map<Integer, Double>> sample, synthetic = new ArrayList<>();
+	private static StringBuilder output = new StringBuilder();
+	private static int curClassLabel = 0;
 	
+	public static void main(String args[]) {
+		try {
+			smote("/Users/weililie/Documents/HKUST/COMP5331/project/data_sets/data_type_A/car/car.data_formatted.txt", 500, 5, 6);
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
 	public static void smote(String inputFilePath, int N, int k, int numAttrs) throws Exception {
 		//read file
 		String outputFilePath = inputFilePath.substring(0, inputFilePath.lastIndexOf(".")) + "_smote" + inputFilePath.substring(inputFilePath.lastIndexOf("."));
         File inputFile = new File(inputFilePath), outputFile = new File(outputFilePath);
 
-        StringBuilder output = new StringBuilder();
         BufferedReader reader = new BufferedReader(new FileReader(inputFile));
         String line;
         HashMap<Integer, List<Map<Integer, Double>>> classToTuples = new HashMap<>();
@@ -79,6 +91,8 @@ public class Smote {
         	}
         	tupleList.add(attributeMap);
         }
+        reader.close();
+        
         int totalTupleNum = 0;
         for(List tuples : classToTuples.values()) {
         	totalTupleNum += tuples.size();
@@ -95,8 +109,8 @@ public class Smote {
         Iterator<Integer> smallClassIt = smallClasses.iterator();
         while(smallClassIt.hasNext()) {
         	int classLabel = smallClassIt.next();
+        	curClassLabel = classLabel;
         	sample = classToTuples.get(classLabel);
-        	int newIndex = 0;
         	for(int i = 0; i < sample.size(); i++) {
         		//get k nearest neighbor
         		ArrayList<Integer> nnArray = getNNArray(i, sample, k, numAttrs);
@@ -104,20 +118,49 @@ public class Smote {
         		populate(N, i, nnArray, k, numAttrs);
         	}
         }
+        
+        //save to new file
+        Path bytes = java.nio.file.Files.copy( 
+                inputFile.toPath(), 
+                outputFile.toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                java.nio.file.StandardCopyOption.COPY_ATTRIBUTES,
+                java.nio.file.LinkOption.NOFOLLOW_LINKS );
+        
+        BufferedWriter writer = new BufferedWriter(new FileWriter(outputFile, true));
+        writer.write(output.toString());
+        writer.flush();
+        writer.close();
 	}
 	
 	private static void populate(int N, int idx, List<Integer> nnArray, int k, int numAttrs) {
 		Random rand = new Random(2015);
 		while(N != 0){
-			int nn = rand.nextInt()%k;
+			int nn = Math.abs(rand.nextInt()%k);
 			Map<Integer, Double> tuple = sample.get(idx);
 			Map<Integer, Double> newSynthetic = new HashMap<>();
 			for(int i = 0; i < numAttrs; i++) {
-				double dif = sample.get(nnArray.get(nn)).get(i) - tuple.get(i);
+				System.out.println("nn: "+ nn);
+				System.out.println("nnArray size: " + nnArray.size());
+				System.out.println("sample size: " + sample.size());
+				System.out.println("sample idx: " + nnArray.get(nn));
+				Double nnI = sample.get(nnArray.get(nn)).get(i), tupleI = tuple.get(i);
+				if (nnI == null) {
+					nnI = 0d;
+				}
+				if(tupleI == null) {
+					tupleI = 0d;
+				}
+				double dif = nnI - tupleI;
 				double gap = rand.nextDouble();
-				newSynthetic.put(i, tuple.get(i) + gap*dif);
+				newSynthetic.put(i, tupleI + gap*dif);
 			}
 			synthetic.add(newSynthetic);
+			output.append(curClassLabel + " ");
+			for(int i = 0; i < numAttrs; i++) {
+				output.append(i + ":" + newSynthetic.get(i).intValue() + " ");
+			}
+			output.append("\n");
 			N--;
 		}
 	}

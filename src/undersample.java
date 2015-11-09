@@ -3,49 +3,50 @@ import java.io.FileReader;
 import java.io.PrintWriter;
 import java.util.StringTokenizer;
 
-public class undersample {
-	public static void main(String[] argv)throws Exception {
-		//Counting number of classes
-		BufferedReader fp = new BufferedReader(new FileReader("../Formatted_data_sets/car/car.data_formatted.txt"));
-		int classcount = 0;
-		while (true) {
-			String line = fp.readLine();
-			if(line == null)
-				break;
-			StringTokenizer st = new StringTokenizer(line," \t\n\r\f:");
-			int classnum = atoi(st.nextToken());
-			if (classnum > classcount)
-				classcount = classnum;
+public class Undersample {
+	public static void main(String[] argv) {
+		int modelNum = 1; //Number of classifier models or bagged numbers
+		double  basicRate = 0.7; //The sample rate of the initial training set
+		String fileName = "../Formatted_data_sets/car/car.data_formatted.txt";
+		try {
+			undersample(modelNum, basicRate, fileName);
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
 		}
-		fp.close();
+	}
+	
+	public static void undersample(int modelNum, double basicRate, String fileName) throws Exception {
+		//Counting number of classes
+		int classCount = classSum(fileName);
 		
 		//Counting number of each class
-		int[] count = new int[classcount];
-		for (int i=0;i<classcount;i++)
+		int[] count = new int[classCount];
+		for (int i=0;i<classCount;i++)
 			count[i] = 0;
-		fp = new BufferedReader(new FileReader("../Formatted_data_sets/car/car.data_formatted.txt"));
-		while (true) {
-			String line = fp.readLine();
-			if(line == null)
-				break;
-			StringTokenizer st = new StringTokenizer(line," \t\n\r\f:");
-			count[atoi(st.nextToken())-1]++;
-		}
-		fp.close();
+		classCounter(count, fileName);
 		
 		//Undersampling to get the training set and testing set
-		int modelnum = 1; //Number of classifier models or bagged numbers
-		double basicrate = 0.7; //The sample rate of the initial training set
-		PrintWriter[] fp_train = new PrintWriter[modelnum+1];
+		baggedSetGenerator(classCount, count, modelNum, basicRate, fileName);
+		
+		//Training and predicting
+		baggedTrain(modelNum);
+		
+		//Calculating and printing the result
+		report(classCount, modelNum);
+	}
+	
+	private static void baggedSetGenerator(int classCount, int count[], int modelNum, double basicRate, String fileName) throws Exception {
+		PrintWriter[] fp_train = new PrintWriter[modelNum+1];
 		fp_train[0] = new PrintWriter("train.txt", "UTF-8");
 		PrintWriter fp_test = new PrintWriter("test.txt", "UTF-8");
-		fp = new BufferedReader(new FileReader("../Formatted_data_sets/car/car.data_formatted.txt"));		
+		BufferedReader fp = new BufferedReader(new FileReader(fileName));		
 		while (true) {
 			String line = fp.readLine();
 			if(line == null)
 				break;
 			double random = Math.random();
-			if (random<basicrate)
+			if (random<basicRate)
 				fp_train[0].println(line);
 			else
 				fp_test.println(line);
@@ -53,14 +54,14 @@ public class undersample {
 		fp.close();
 		fp_train[0].close();
 		fp_test.close();
-		double mincount = count[0];
-		for (int i=1;i<classcount;i++)
-			if (count[i]<mincount)
-				mincount=count[i];
-		double[] samplerate = new double[classcount];
-		for (int i=0;i<classcount;i++)
-			samplerate[i]=mincount/count[i];
-		for (int i=0;i<modelnum;i++) {
+		double minCount = count[0];
+		for (int i=1;i<classCount;i++)
+			if (count[i]<minCount)
+				minCount=count[i];
+		double[] sampleRate = new double[classCount];
+		for (int i=0;i<classCount;i++)
+			sampleRate[i]=minCount/count[i];
+		for (int i=0;i<modelNum;i++) {
 			StringBuilder str = new StringBuilder();
 			str.append("train");
 			str.append(i+1);
@@ -74,16 +75,44 @@ public class undersample {
 					break;
 				StringTokenizer st = new StringTokenizer(line," \t\n\r\f:");
 				double random = Math.random();
-				if (random<samplerate[atoi(st.nextToken())-1])
+				if (random<sampleRate[atoi(st.nextToken())-1])
 					fp_train[i+1].println(line);
 			}
 			fp.close();
 			fp_train[i+1].close();
 		}
-		
-		
-		//Training and predicting
-		for (int i=0;i<modelnum;i++) {
+	}
+	
+	private static int classSum(String fileName) throws Exception {
+		int classCount = 0;
+		BufferedReader fp = new BufferedReader(new FileReader(fileName));
+		while (true) {
+			String line = fp.readLine();
+			if(line == null)
+				break;
+			StringTokenizer st = new StringTokenizer(line," \t\n\r\f:");
+			int classNum = atoi(st.nextToken());
+			if (classNum > classCount)
+				classCount = classNum;
+		}
+		fp.close();
+		return classCount;
+	}
+	
+	private static void classCounter(int count[], String fileName) throws Exception {
+		BufferedReader fp = new BufferedReader(new FileReader(fileName));
+		while (true) {
+			String line = fp.readLine();
+			if(line == null)
+				break;
+			StringTokenizer st = new StringTokenizer(line," \t\n\r\f:");
+			count[atoi(st.nextToken())-1]++;
+		}
+		fp.close();
+	}
+	
+	private static void baggedTrain(int modelNum) throws Exception {
+		for (int i=0;i<modelNum;i++) {
 			StringBuilder str1 = new StringBuilder();
 			str1.append("train");
 			str1.append(i+1);
@@ -93,36 +122,37 @@ public class undersample {
 			str2.append("output");
 			str2.append(i+1);
 			str2.append(".txt");
-			String outputfile = str2.toString();
+			String outputFile = str2.toString();
 			//String[] scaleArgTrain = {"-l", "0", "-s", "scale.txt", trainfile};
 			//String[] scaleArgTest = {"-r", "scale.txt", "test.txt"};
 			//svm_scale.main(scaleArgTrain);
 			//svm_scale.main(scaleArgTest);
 			String[] trainArgs = {trainfile};
 			String modelFile = svm_train.main(trainArgs);    
-			String[] testArgs = {"test.txt", modelFile, outputfile};
+			String[] testArgs = {"test.txt", modelFile, outputFile};
 			svm_predict.main(testArgs);
 		}
-		
-		//Calculating and printing the result
+	}
+	
+	private static void report(int classCount, int modelNum) throws Exception {
 		BufferedReader fp1 = new BufferedReader(new FileReader("test.txt"));
-		BufferedReader[] fp2 = new BufferedReader[modelnum];
-		for (int i=0;i<modelnum;i++) {
+		BufferedReader[] fp2 = new BufferedReader[modelNum];
+		for (int i=0;i<modelNum;i++) {
 			StringBuilder str = new StringBuilder();
 			str.append("output");
 			str.append(i+1);
 			str.append(".txt");
-			String outputfile = str.toString();
-			fp2[i] = new BufferedReader(new FileReader(outputfile));
+			String outputFile = str.toString();
+			fp2[i] = new BufferedReader(new FileReader(outputFile));
 		}
-		int[][] confusionmatrix = new int[classcount][classcount];
-		double[] TP = new double[classcount];
-		double[] TN = new double[classcount];
-		double[] FP = new double[classcount];
-		double[] FN = new double[classcount];
-		for (int i=0;i<classcount;i++){
-			for (int j=0;j<classcount;j++)
-				confusionmatrix[i][j]=0;
+		int[][] confusionMatrix = new int[classCount][classCount];
+		double[] TP = new double[classCount];
+		double[] TN = new double[classCount];
+		double[] FP = new double[classCount];
+		double[] FN = new double[classCount];
+		for (int i=0;i<classCount;i++){
+			for (int j=0;j<classCount;j++)
+				confusionMatrix[i][j]=0;
 			TP[i] = 0;
 			TN[i] = 0;
 			FP[i] = 0;
@@ -130,43 +160,43 @@ public class undersample {
 		}
 		while (true) {
 			String line1 = fp1.readLine();
-			String[] line2 = new String[modelnum];
-			for (int i=0;i<modelnum;i++)
+			String[] line2 = new String[modelNum];
+			for (int i=0;i<modelNum;i++)
 				line2[i] = fp2[i].readLine();
 			if(line1 == null)
 				break;
 			StringTokenizer st1 = new StringTokenizer(line1," \t\n\r\f:");
-			StringTokenizer[] st2 = new StringTokenizer[modelnum];
-			for (int i=0;i<modelnum;i++)
+			StringTokenizer[] st2 = new StringTokenizer[modelNum];
+			for (int i=0;i<modelNum;i++)
 				st2[i] = new StringTokenizer(line2[i]," \t\n\r\f:");
-			int realclass = atoi(st1.nextToken())-1;
-			int[] predictcount = new int[classcount];
-			for (int i=0;i<classcount;i++)
+			int realClass = atoi(st1.nextToken())-1;
+			int[] predictcount = new int[classCount];
+			for (int i=0;i<classCount;i++)
 				predictcount[i] = 0;
-			for (int i=0;i<modelnum;i++)
+			for (int i=0;i<modelNum;i++)
 				predictcount[(int)atof(st2[i].nextToken())-1]++;
-			int predictclass = 0;
-			for (int i=1;i<classcount;i++)
-				if (predictcount[i]>predictcount[predictclass])
-					predictclass = i;
-			confusionmatrix[realclass][predictclass]++;
-			for (int i=0;i<classcount;i++)
-				if (realclass == i && predictclass == i)
+			int predictClass = 0;
+			for (int i=1;i<classCount;i++)
+				if (predictcount[i]>predictcount[predictClass])
+					predictClass = i;
+			confusionMatrix[realClass][predictClass]++;
+			for (int i=0;i<classCount;i++)
+				if (realClass == i && predictClass == i)
 					TP[i]++;
-				else if (realclass == i && predictclass != i)
+				else if (realClass == i && predictClass != i)
 					FN[i]++;
-				else if (realclass != i && predictclass == i)
+				else if (realClass != i && predictClass == i)
 					FP[i]++;
 				else
 					TN[i]++;
 		}
 		fp1.close();
-		for (int i=0;i<modelnum;i++)
+		for (int i=0;i<modelNum;i++)
 			fp2[i].close();
 		//Calculating micro-averaged F-measure: 
 		//Page6 of http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.104.8244&rep=rep1&type=pdf
 		double specificity, recall, f2, TNsum=0, TNFN=0, TPsum=0, TPFN=0;
-		for (int i=0;i<classcount;i++) {
+		for (int i=0;i<classCount;i++) {
 			TNsum += TN[i];
 			TNFN += (TN[i]+FN[i]);
 			TPsum += TP[i];
@@ -175,12 +205,12 @@ public class undersample {
 		specificity = TNsum/TNFN;
 		recall = TPsum/TPFN;
 		f2 = (1+2*2)*specificity*recall/(2*2*specificity+recall);
-		System.out.println("\nClass Number : " + classcount);
-		System.out.println("Classifier Number : " + modelnum);
+		System.out.println("\nClass Number : " + classCount);
+		System.out.println("Classifier Number : " + modelNum);
 		System.out.println("Confusion Matrix :");
-		for (int i=0;i<classcount;i++) {
-			for (int j=0;j<classcount;j++)
-				System.out.format("%8d",confusionmatrix[i][j]);
+		for (int i=0;i<classCount;i++) {
+			for (int j=0;j<classCount;j++)
+				System.out.format("%8d",confusionMatrix[i][j]);
 			System.out.print("\n");
 		}
 		System.out.format("The micro-averaged F2-measure : %f", f2);

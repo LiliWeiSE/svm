@@ -67,7 +67,9 @@ public class Smote {
 	        String baseName = inputFilePath.substring(0, indexOfDot), suffix = inputFilePath.substring(indexOfDot);
 	        String originalTrainFilePath =  baseName + "_train" + suffix, smoteTrainFilePath = baseName + "_smote" + "_train" + suffix;
 	        String testFilePath = baseName + "_test" + suffix;
-	        String originalTestOutputPath = baseName + "_test_output" + suffix, smoteTestOutputPath = baseName + "_smote" + "_test_output" + suffix;
+	        String originalTestOutputPath = baseName + "_test_output" + suffix,
+	        		smoteTestOutputPath = baseName + "_smote" + "_test_output" + suffix,
+	        		weightedTestOutputPath = baseName + "_weighted" + "_test_output"+ suffix;
 	        generateTrainAndTest(inputFilePath, originalTrainFilePath, testFilePath, 0.7);
 	        
 	        String smoteFilePath = smote(inputFilePath, 700, 10, 9);
@@ -84,10 +86,40 @@ public class Smote {
 	        
 	        String[] smoteTestArgs = {testFilePath, smoteModelFile, smoteTestOutputPath};
 	        svm_predict.main(smoteTestArgs);
+	        
+	        
+	        //weighted svm
+	        int C = 10;
+	        int classCount = classToTuples.size(), total = 0;
+	        int[] classNumbers = new int[classCount], weight = new int[classCount];
+	        for(int i = 0; i < classCount; i++) {
+	        	classNumbers[i] = classToTuples.get(i+1).size();
+	        	total += classNumbers[i];
+	        }
+	        for(int i = 0; i < classCount; i++) {
+	        	weight[i] = C*total/classNumbers[i];
+	        }
+	        
+	        List<String> weightedTrainArgsList = new ArrayList<String>();
+	        for(int i = 0; i < classCount; i++) {
+	        	int className = i + 1;
+	        	weightedTrainArgsList.add("-w" + className);
+	        	weightedTrainArgsList.add("" + weight[i]);
+	        }
+	        weightedTrainArgsList.add(originalTrainFilePath);
+	        String[] weightedTrainArgs = weightedTrainArgsList.toArray(new String[0]);
+	        String weightedModelFile = svm_train.main(weightedTrainArgs);
+	        
+	        String[] weightedTestArgs = {testFilePath, weightedModelFile, weightedTestOutputPath};
+	        svm_predict.main(weightedTestArgs);
+	        
+	        
 	        System.out.println("original run:");
 	        report(testFilePath, originalTestOutputPath);
 	        System.out.println("smote run:");
 	        report(testFilePath, smoteTestOutputPath);
+	        System.out.println("weighted svm run:");
+	        report(testFilePath, weightedTestOutputPath);
 	        
 		} catch (Exception e) {
 			e.printStackTrace();

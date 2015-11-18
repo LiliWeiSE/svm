@@ -1,5 +1,6 @@
 import java.io.BufferedReader;
 import java.io.FileReader;
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.StringTokenizer;
 
@@ -112,6 +113,7 @@ public class Undersample {
 	}
 	
 	private static void baggedTrain(int modelNum) throws Exception {
+		// With undersampling
 		for (int i=0;i<modelNum;i++) {
 			StringBuilder str1 = new StringBuilder();
 			str1.append("train");
@@ -132,6 +134,11 @@ public class Undersample {
 			String[] testArgs = {"test.txt", modelFile, outputFile};
 			svm_predict.main(testArgs);
 		}
+		// Without undersampling
+		String[] trainArgs = {"train.txt"};
+		String modelFile = svm_train.main(trainArgs);    
+		String[] testArgs = {"test.txt", modelFile, "output.txt"};
+		svm_predict.main(testArgs);
 	}
 	
 	private static void report(int classCount, int modelNum) throws Exception {
@@ -146,18 +153,9 @@ public class Undersample {
 			fp2[i] = new BufferedReader(new FileReader(outputFile));
 		}
 		int[][] confusionMatrix = new int[classCount][classCount];
-		double[] TP = new double[classCount];
-		double[] TN = new double[classCount];
-		double[] FP = new double[classCount];
-		double[] FN = new double[classCount];
-		for (int i=0;i<classCount;i++){
+		for (int i=0;i<classCount;i++)
 			for (int j=0;j<classCount;j++)
 				confusionMatrix[i][j]=0;
-			TP[i] = 0;
-			TN[i] = 0;
-			FP[i] = 0;
-			FN[i] = 0;
-		}
 		while (true) {
 			String line1 = fp1.readLine();
 			String[] line2 = new String[modelNum];
@@ -180,22 +178,87 @@ public class Undersample {
 				if (predictcount[i]>predictcount[predictClass])
 					predictClass = i;
 			confusionMatrix[realClass][predictClass]++;
-			for (int i=0;i<classCount;i++)
-				if (realClass == i && predictClass == i)
-					TP[i]++;
-				else if (realClass == i && predictClass != i)
-					FN[i]++;
-				else if (realClass != i && predictClass == i)
-					FP[i]++;
-				else
-					TN[i]++;
 		}
 		fp1.close();
 		for (int i=0;i<modelNum;i++)
 			fp2[i].close();
+		double[] f2_average = new double[2]; // micro_average_f2 and macro_average_f2
+		f2_average[0] = 0; f2_average[1] = 0;
+		f2Calculator(confusionMatrix, classCount, f2_average);
+		System.out.println("\nClass Number : " + classCount);
+		System.out.println("Classifier Number : " + modelNum);
+		originalReport(classCount);
+		System.out.println("----------SVM with Undersampling----------");
+		System.out.println("Confusion Matrix :");
+		for (int i=0;i<classCount;i++) {
+			for (int j=0;j<classCount;j++)
+				System.out.format("%8d",confusionMatrix[i][j]);
+			System.out.print("\n");
+		}
+		System.out.format("The micro-averaged F2-measure : %f \n", f2_average[0]);
+		System.out.format("The macro-averaged F2-measure : %f \n", f2_average[1]);
+	}
+	
+	private static void originalReport(int classCount) throws IOException{
+		BufferedReader fp1 = new BufferedReader(new FileReader("test.txt"));
+		BufferedReader fp2 = new BufferedReader(new FileReader("output.txt"));
+		int[][] confusionMatrix = new int[classCount][classCount];
+		for (int i=0;i<classCount;i++)
+			for (int j=0;j<classCount;j++)
+				confusionMatrix[i][j]=0;
+		while (true) {
+			String line1 = fp1.readLine();
+			String line2 = fp2.readLine();
+			if(line1 == null)
+				break;
+			StringTokenizer st1 = new StringTokenizer(line1," \t\n\r\f:");
+			StringTokenizer st2 = new StringTokenizer(line2," \t\n\r\f:");
+			int realClass = atoi(st1.nextToken())-1;
+			int predictClass = (int)atof(st2.nextToken())-1;
+			confusionMatrix[realClass][predictClass]++;
+		}
+		fp1.close();
+		fp2.close();
+		double[] f2_average = new double[2]; // micro_average_f2 and macro_average_f2
+		f2_average[0] = 0; f2_average[1] = 0;
+		f2Calculator(confusionMatrix, classCount, f2_average);
+		System.out.println("----------Baseline SVM----------");
+		System.out.println("Confusion Matrix :");
+		for (int i=0;i<classCount;i++) {
+			for (int j=0;j<classCount;j++)
+				System.out.format("%8d",confusionMatrix[i][j]);
+			System.out.print("\n");
+		}
+		System.out.format("The micro-averaged F2-measure : %f \n", f2_average[0]);
+		System.out.format("The macro-averaged F2-measure : %f \n", f2_average[1]);
+	}
+	
+	private static void f2Calculator(int[][] confusionMatrix, int classCount, double[] f2_average){
+		double[] TP = new double[classCount];
+		double[] TN = new double[classCount];
+		double[] FP = new double[classCount];
+		double[] FN = new double[classCount];
+		for (int i=0;i<classCount;i++){
+			TP[i] = 0;
+			TN[i] = 0;
+			FP[i] = 0;
+			FN[i] = 0;
+		}
+		for (int rClass=0;rClass<classCount;rClass++)
+			for (int pClass=0;pClass<classCount;pClass++)
+				for (int i=0;i<classCount;i++){
+					if (rClass == i && pClass == i)
+						TP[i] += confusionMatrix[rClass][pClass];
+					else if (rClass == i && pClass != i)
+						FN[i] += confusionMatrix[rClass][pClass];
+					else if (rClass != i && pClass == i)
+						FP[i] += confusionMatrix[rClass][pClass];
+					else
+						TN[i] += confusionMatrix[rClass][pClass];
+				}
 		//Calculating F-measure: 
 		//Page6 of http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.104.8244&rep=rep1&type=pdf
-		double specificity, recall, f2_micro, f2_macro=0, TNsum=0, TNFN=0, TPsum=0, TPFN=0;
+		double specificity, recall, TNsum=0, TNFN=0, TPsum=0, TPFN=0;
 		double[] f2 = new double[classCount];
 		for (int i=0;i<classCount;i++) {
 			TNsum += TN[i];
@@ -203,22 +266,12 @@ public class Undersample {
 			TPsum += TP[i];
 			TPFN += (TP[i]+FN[i]);
 			f2[i] = (1+2*2)*(TN[i]/(TN[i]+FN[i]))*(TP[i]/(TP[i]+FN[i]))/(2*2*(TN[i]/(TN[i]+FN[i]))+(TP[i]/(TP[i]+FN[i])));
-			f2_macro += f2[i];
+			f2_average[1] += f2[i];
 		}
-		f2_macro = f2_macro/classCount;
+		f2_average[1] = f2_average[1]/classCount;
 		specificity = TNsum/TNFN;
 		recall = TPsum/TPFN;
-		f2_micro = (1+2*2)*specificity*recall/(2*2*specificity+recall);
-		System.out.println("\nClass Number : " + classCount);
-		System.out.println("Classifier Number : " + modelNum);
-		System.out.println("Confusion Matrix :");
-		for (int i=0;i<classCount;i++) {
-			for (int j=0;j<classCount;j++)
-				System.out.format("%8d",confusionMatrix[i][j]);
-			System.out.print("\n");
-		}
-		System.out.format("The micro-averaged F2-measure : %f \n", f2_micro);
-		System.out.format("The micro-averaged F2-measure : %f \n", f2_macro);
+		f2_average[0] = (1+2*2)*specificity*recall/(2*2*specificity+recall);
 	}
 	
 	private static int atoi(String s)

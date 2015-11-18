@@ -51,7 +51,7 @@ class IdxAndDst implements Comparable {
 	
 }
 public class Smote {
-	private static double minProportion = 0.1;
+	private static double minProportion = 0.3;
 	private static List<Map<Integer, Double>> sample;
 	private static Set<Map<Integer, Double>> synthetic = new HashSet<>();
 	private static StringBuilder output = new StringBuilder();
@@ -60,7 +60,7 @@ public class Smote {
 	
 	public static void main(String args[]) {
 		try {
-			String inputFilePath = "/Users/weililie/Documents/HKUST/COMP5331/project/data_sets/data_type_A/car/car.data_formatted.txt"; 
+			String inputFilePath = "/Users/weililie/Documents/HKUST/COMP5331/project/data_sets/data_type_A/cmc/cmc.data_formatted.txt"; 
 			
 			
 			int indexOfDot = inputFilePath.lastIndexOf(".");
@@ -70,7 +70,7 @@ public class Smote {
 	        String originalTestOutputPath = baseName + "_test_output" + suffix, smoteTestOutputPath = baseName + "_smote" + "_test_output" + suffix;
 	        generateTrainAndTest(inputFilePath, originalTrainFilePath, testFilePath, 0.7);
 	        
-	        String smoteFilePath = smote(inputFilePath, 500, 5, 6);
+	        String smoteFilePath = smote(inputFilePath, 700, 10, 9);
 	        generateTrainAndTest(smoteFilePath, smoteTrainFilePath, null, 0.7);
 	        
 	        String[] trainArgs = {originalTrainFilePath};//directory of training file
@@ -130,18 +130,23 @@ public class Smote {
 			TN[i] = total - TP[i] - FP[i] - FN[i];
 		}
 		
-		double specificity, recall, f2, TNsum=0, TNFN=0, TPsum=0, TPFN=0;
+		double specificity, recall, f2_micro, f2_macro=0, TNsum=0, TNFN=0, TPsum=0, TPFN=0;
+		double[] f2 = new double[classCount];
 		for (int i=0;i<classCount;i++) {
 			TNsum += TN[i];
 			TNFN += (TN[i]+FN[i]);
 			TPsum += TP[i];
 			TPFN += (TP[i]+FN[i]);
+			f2[i] = (1+2*2)*(TN[i]/(TN[i]+FN[i]))*(TP[i]/(TP[i]+FN[i]))/(2*2*(TN[i]/(TN[i]+FN[i]))+(TP[i]/(TP[i]+FN[i])));
+			f2_macro += f2[i];
 		}
+		f2_macro = f2_macro/classCount;
 		specificity = TNsum/TNFN;
 		recall = TPsum/TPFN;
-		f2 = (1+2*2)*specificity*recall/(2*2*specificity+recall);
+		f2_micro = (1+2*2)*specificity*recall/(2*2*specificity+recall);
 		
-		System.out.println("F2 of this run is: " + f2);
+		System.out.format("The micro-averaged F2-measure : %f \n", f2_micro);
+		System.out.format("The macro-averaged F2-measure : %f \n", f2_macro);
 	}
 	
 	public static String smote(String inputFilePath, int N, int k, int numAttrs) throws Exception {

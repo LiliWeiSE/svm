@@ -218,7 +218,7 @@ public class Undersample {
 			System.out.print("\n");
 		}
 		System.out.format("The micro-averaged F2-measure : %f \n", f2_micro);
-		System.out.format("The micro-averaged F2-measure : %f \n", f2_macro);
+		System.out.format("The macro-averaged F2-measure : %f \n", f2_macro);
 	}
 	
 	private static int atoi(String s)

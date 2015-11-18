@@ -5,7 +5,7 @@ import java.util.StringTokenizer;
 
 public class Undersample {
 	public static void main(String[] argv) {
-		int modelNum = 1; //Number of classifier models or bagged numbers
+		int modelNum = 11; //Number of classifier models or bagged numbers
 		double  basicRate = 0.7; //The sample rate of the initial training set
 		String fileName = "../Formatted_data_sets/car/car.data_formatted.txt";
 		try {
@@ -193,18 +193,22 @@ public class Undersample {
 		fp1.close();
 		for (int i=0;i<modelNum;i++)
 			fp2[i].close();
-		//Calculating micro-averaged F-measure: 
+		//Calculating F-measure: 
 		//Page6 of http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.104.8244&rep=rep1&type=pdf
-		double specificity, recall, f2, TNsum=0, TNFN=0, TPsum=0, TPFN=0;
+		double specificity, recall, f2_micro, f2_macro=0, TNsum=0, TNFN=0, TPsum=0, TPFN=0;
+		double[] f2 = new double[classCount];
 		for (int i=0;i<classCount;i++) {
 			TNsum += TN[i];
 			TNFN += (TN[i]+FN[i]);
 			TPsum += TP[i];
 			TPFN += (TP[i]+FN[i]);
+			f2[i] = (1+2*2)*(TN[i]/(TN[i]+FN[i]))*(TP[i]/(TP[i]+FN[i]))/(2*2*(TN[i]/(TN[i]+FN[i]))+(TP[i]/(TP[i]+FN[i])));
+			f2_macro += f2[i];
 		}
+		f2_macro = f2_macro/classCount;
 		specificity = TNsum/TNFN;
 		recall = TPsum/TPFN;
-		f2 = (1+2*2)*specificity*recall/(2*2*specificity+recall);
+		f2_micro = (1+2*2)*specificity*recall/(2*2*specificity+recall);
 		System.out.println("\nClass Number : " + classCount);
 		System.out.println("Classifier Number : " + modelNum);
 		System.out.println("Confusion Matrix :");
@@ -213,7 +217,8 @@ public class Undersample {
 				System.out.format("%8d",confusionMatrix[i][j]);
 			System.out.print("\n");
 		}
-		System.out.format("The micro-averaged F2-measure : %f", f2);
+		System.out.format("The micro-averaged F2-measure : %f \n", f2_micro);
+		System.out.format("The micro-averaged F2-measure : %f \n", f2_macro);
 	}
 	
 	private static int atoi(String s)

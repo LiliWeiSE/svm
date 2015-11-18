@@ -1,17 +1,20 @@
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Random;
+import java.util.Set;
 
 class IdxAndDst implements Comparable {
 	private int idx;
@@ -49,29 +52,113 @@ class IdxAndDst implements Comparable {
 }
 public class Smote {
 	private static double minProportion = 0.1;
-	private static List<Map<Integer, Double>> sample, synthetic = new ArrayList<>();
+	private static List<Map<Integer, Double>> sample;
+	private static Set<Map<Integer, Double>> synthetic = new HashSet<>();
 	private static StringBuilder output = new StringBuilder();
+	private static HashMap<Integer, List<Map<Integer, Double>>> classToTuples = new HashMap<>();
 	private static int curClassLabel = 0;
 	
 	public static void main(String args[]) {
 		try {
-			smote("/Users/weililie/Documents/HKUST/COMP5331/project/data_sets/data_type_A/car/car.data_formatted.txt", 500, 5, 6);
+			String inputFilePath = "/Users/weililie/Documents/HKUST/COMP5331/project/data_sets/data_type_A/car/car.data_formatted.txt"; 
+			
+			
+			int indexOfDot = inputFilePath.lastIndexOf(".");
+	        String baseName = inputFilePath.substring(0, indexOfDot), suffix = inputFilePath.substring(indexOfDot);
+	        String originalTrainFilePath =  baseName + "_train" + suffix, smoteTrainFilePath = baseName + "_smote" + "_train" + suffix;
+	        String testFilePath = baseName + "_test" + suffix;
+	        String originalTestOutputPath = baseName + "_test_output" + suffix, smoteTestOutputPath = baseName + "_smote" + "_test_output" + suffix;
+	        generateTrainAndTest(inputFilePath, originalTrainFilePath, testFilePath, 0.7);
+	        
+	        String smoteFilePath = smote(inputFilePath, 500, 5, 6);
+	        generateTrainAndTest(smoteFilePath, smoteTrainFilePath, null, 0.7);
+	        
+	        String[] trainArgs = {originalTrainFilePath};//directory of training file
+	        String originalModelFile = svm_train.main(trainArgs);
+	        
+	        String[] testArgs = {testFilePath, originalModelFile, originalTestOutputPath};//directory of test file, model file, result file  
+	        svm_predict.main(testArgs);
+	        
+	        String[] smoteTrainArgs = {smoteTrainFilePath};
+	        String smoteModelFile = svm_train.main(smoteTrainArgs);
+	        
+	        String[] smoteTestArgs = {testFilePath, smoteModelFile, smoteTestOutputPath};
+	        svm_predict.main(smoteTestArgs);
+	        System.out.println("original run:");
+	        report(testFilePath, originalTestOutputPath);
+	        System.out.println("smote run:");
+	        report(testFilePath, smoteTestOutputPath);
+	        
 		} catch (Exception e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}
-	public static void smote(String inputFilePath, int N, int k, int numAttrs) throws Exception {
+	
+	public static void report(String testFilePath, String testOutputPath) throws Exception {
+		BufferedReader truthReader = new BufferedReader(new FileReader(testFilePath)), outputReader = new BufferedReader(new FileReader(testOutputPath));
+		int classCount = classToTuples.size();
+		
+		double[] TP = new double[classCount];
+		double[] TN = new double[classCount];
+		double[] FP = new double[classCount];
+		double[] FN = new double[classCount];
+		
+		for (int i=0;i<classCount;i++){
+			TP[i] = 0;
+			TN[i] = 0;
+			FP[i] = 0;
+			FN[i] = 0;
+		}
+		
+		String lineTruth, lineOutput;
+		int total = 0;
+		while((lineTruth = truthReader.readLine()) != null) {
+			lineOutput = outputReader.readLine();
+			String outputLabel = lineOutput.split(" ")[0];
+			int outputClass = Integer.parseInt(outputLabel.substring(0, outputLabel.lastIndexOf("."))),
+					truthClass = Integer.parseInt(lineTruth.split(" ")[0]);
+			if(outputClass == truthClass) {
+				TP[outputClass - 1]++;
+			} else {
+				FP[outputClass - 1]++;
+				FN[truthClass - 1]++;
+			}
+			total++;
+		}
+		
+		for(int i  = 0; i < classCount; i++){
+			TN[i] = total - TP[i] - FP[i] - FN[i];
+		}
+		
+		double specificity, recall, f2, TNsum=0, TNFN=0, TPsum=0, TPFN=0;
+		for (int i=0;i<classCount;i++) {
+			TNsum += TN[i];
+			TNFN += (TN[i]+FN[i]);
+			TPsum += TP[i];
+			TPFN += (TP[i]+FN[i]);
+		}
+		specificity = TNsum/TNFN;
+		recall = TPsum/TPFN;
+		f2 = (1+2*2)*specificity*recall/(2*2*specificity+recall);
+		
+		System.out.println("F2 of this run is: " + f2);
+	}
+	
+	public static String smote(String inputFilePath, int N, int k, int numAttrs) throws Exception {
 		//read file
 		String outputFilePath = inputFilePath.substring(0, inputFilePath.lastIndexOf(".")) + "_smote" + inputFilePath.substring(inputFilePath.lastIndexOf("."));
         File inputFile = new File(inputFilePath), outputFile = new File(outputFilePath);
 
         BufferedReader reader = new BufferedReader(new FileReader(inputFile));
         String line;
-        HashMap<Integer, List<Map<Integer, Double>>> classToTuples = new HashMap<>();
+        
         
         N = (int)N/100;
+        
+        StringBuilder origin = new StringBuilder();
         while((line = reader.readLine()) != null) {
+        	origin.append(line + "\n");
+        	
         	//record classes and their corresponding tuples
         	String[] tupleItems = line.split(" ");
         	int className = Integer.parseInt(tupleItems[0]);
@@ -120,17 +207,50 @@ public class Smote {
         }
         
         //save to new file
-        Path bytes = java.nio.file.Files.copy( 
-                inputFile.toPath(), 
-                outputFile.toPath(),
-                java.nio.file.StandardCopyOption.REPLACE_EXISTING,
-                java.nio.file.StandardCopyOption.COPY_ATTRIBUTES,
-                java.nio.file.LinkOption.NOFOLLOW_LINKS );
+//        Path bytes = java.nio.file.Files.copy( 
+//                inputFile.toPath(), 
+//                outputFile.toPath(),
+//                java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+//                java.nio.file.StandardCopyOption.COPY_ATTRIBUTES,
+//                java.nio.file.LinkOption.NOFOLLOW_LINKS );
         
-        BufferedWriter writer = new BufferedWriter(new FileWriter(outputFile, true));
+        BufferedWriter writer = new BufferedWriter(new FileWriter(outputFile));
         writer.write(output.toString());
+        writer.write(origin.toString());
+        
         writer.flush();
         writer.close();
+        
+        return outputFilePath;
+	}
+	
+	private static void generateTrainAndTest(String originalFilePath, String trainFilePath, String testFilePath, double basicRate) throws Exception {
+		BufferedReader reader = new BufferedReader(new FileReader(originalFilePath));
+        String line;
+        StringBuilder trainBuilder = new StringBuilder(), testBuilder = new StringBuilder();
+        
+        Random rand = new Random();
+        
+        while((line = reader.readLine()) != null) {
+        	if(rand.nextDouble() <= basicRate) {
+        		trainBuilder.append(line + "\n");
+        	} else {
+        		testBuilder.append(line + "\n");
+        	}
+        }
+        BufferedWriter writerTrain = new BufferedWriter(new FileWriter(trainFilePath));
+        writerTrain.write(trainBuilder.toString());
+        
+        writerTrain.flush();
+        writerTrain.close();
+        if(testFilePath != null){
+        	BufferedWriter writerTest = new BufferedWriter(new FileWriter(testFilePath));
+        	writerTest.write(testBuilder.toString());
+        
+        	writerTest.flush();
+        	writerTest.close();
+        }
+        
 	}
 	
 	private static void populate(int N, int idx, List<Integer> nnArray, int k, int numAttrs) {

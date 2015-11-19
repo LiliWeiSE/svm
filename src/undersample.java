@@ -7,7 +7,7 @@ import java.util.StringTokenizer;
 public class Undersample {
 	public static void main(String[] argv) {
 		int modelNum = 11; //Number of classifier models or bagged numbers
-		double  basicRate = 0.7; //The sample rate of the initial training set
+		double  basicRate = 0.1; //The sample rate of the initial training set
 		String fileName = "../Formatted_data_sets/car/car.data_formatted.txt";
 		try {
 			undersample(modelNum, basicRate, fileName);
@@ -258,18 +258,18 @@ public class Undersample {
 				}
 		//Calculating F-measure: 
 		//Page6 of http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.104.8244&rep=rep1&type=pdf
-		double specificity, recall, TNsum=0, TNFN=0, TPsum=0, TPFN=0;
+		double specificity, recall, TNsum=0, FPTN=0, TPsum=0, TPFN=0;
 		double[] f2 = new double[classCount];
 		for (int i=0;i<classCount;i++) {
 			TNsum += TN[i];
-			TNFN += (TN[i]+FN[i]);
+			FPTN += (FP[i]+TN[i]);
 			TPsum += TP[i];
 			TPFN += (TP[i]+FN[i]);
-			f2[i] = (1+2*2)*(TN[i]/(TN[i]+FN[i]))*(TP[i]/(TP[i]+FN[i]))/(2*2*(TN[i]/(TN[i]+FN[i]))+(TP[i]/(TP[i]+FN[i])));
+			f2[i] = (1+2*2)*(TN[i]/(TN[i]+FP[i]))*(TP[i]/(TP[i]+FN[i]))/(2*2*(TN[i]/(TN[i]+FP[i]))+(TP[i]/(TP[i]+FN[i])));
 			f2_average[1] += f2[i];
 		}
 		f2_average[1] = f2_average[1]/classCount;
-		specificity = TNsum/TNFN;
+		specificity = TNsum/FPTN;
 		recall = TPsum/TPFN;
 		f2_average[0] = (1+2*2)*specificity*recall/(2*2*specificity+recall);
 	}

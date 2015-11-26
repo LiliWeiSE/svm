@@ -60,7 +60,7 @@ public class Smote {
 	
 	public static void main(String args[]) {
 		try {
-			String inputFilePath = "/Users/weililie/Documents/HKUST/COMP5331/project/data_sets/data_type_A/cmc/cmc.data_formatted.txt"; 
+			String inputFilePath = "/Users/weililie/Documents/HKUST/COMP5331/project/data_sets/data_type_A/vehicle/vehicle.data_formatted.txt"; 
 			
 			
 			int indexOfDot = inputFilePath.lastIndexOf(".");
@@ -116,10 +116,11 @@ public class Smote {
 	        
 	        System.out.println("original run:");
 	        report(testFilePath, originalTestOutputPath);
-	        System.out.println("smote run:");
-	        report(testFilePath, smoteTestOutputPath);
 	        System.out.println("weighted svm run:");
 	        report(testFilePath, weightedTestOutputPath);
+	        System.out.println("smote run:");
+	        report(testFilePath, smoteTestOutputPath);
+	        
 	        
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -162,18 +163,18 @@ public class Smote {
 			TN[i] = total - TP[i] - FP[i] - FN[i];
 		}
 		
-		double specificity, recall, f2_micro, f2_macro=0, TNsum=0, TNFN=0, TPsum=0, TPFN=0;
+		double specificity, recall, f2_micro, f2_macro=0, TNsum=0, FPTN=0, TPsum=0, TPFN=0;
 		double[] f2 = new double[classCount];
 		for (int i=0;i<classCount;i++) {
 			TNsum += TN[i];
-			TNFN += (TN[i]+FN[i]);
+			FPTN += (FP[i]+TN[i]);
 			TPsum += TP[i];
 			TPFN += (TP[i]+FN[i]);
-			f2[i] = (1+2*2)*(TN[i]/(TN[i]+FN[i]))*(TP[i]/(TP[i]+FN[i]))/(2*2*(TN[i]/(TN[i]+FN[i]))+(TP[i]/(TP[i]+FN[i])));
+			f2[i] = (1+2*2)*(TN[i]/(TN[i]+FP[i]))*(TP[i]/(TP[i]+FN[i]))/(2*2*(TN[i]/(TN[i]+FP[i]))+(TP[i]/(TP[i]+FN[i])));
 			f2_macro += f2[i];
 		}
 		f2_macro = f2_macro/classCount;
-		specificity = TNsum/TNFN;
+		specificity = TNsum/FPTN;
 		recall = TPsum/TPFN;
 		f2_micro = (1+2*2)*specificity*recall/(2*2*specificity+recall);
 		
@@ -297,10 +298,10 @@ public class Smote {
 			Map<Integer, Double> tuple = sample.get(idx);
 			Map<Integer, Double> newSynthetic = new HashMap<>();
 			for(int i = 0; i < numAttrs; i++) {
-				System.out.println("nn: "+ nn);
-				System.out.println("nnArray size: " + nnArray.size());
-				System.out.println("sample size: " + sample.size());
-				System.out.println("sample idx: " + nnArray.get(nn));
+//				System.out.println("nn: "+ nn);
+//				System.out.println("nnArray size: " + nnArray.size());
+//				System.out.println("sample size: " + sample.size());
+//				System.out.println("sample idx: " + nnArray.get(nn));
 				Double nnI = sample.get(nnArray.get(nn)).get(i), tupleI = tuple.get(i);
 				if (nnI == null) {
 					nnI = 0d;
@@ -315,7 +316,7 @@ public class Smote {
 			synthetic.add(newSynthetic);
 			output.append(curClassLabel + " ");
 			for(int i = 0; i < numAttrs; i++) {
-				output.append(i + ":" + newSynthetic.get(i).intValue() + " ");
+				output.append(i + ":" + newSynthetic.get(i)/*.intValue()*/ + " ");
 			}
 			output.append("\n");
 			N--;
